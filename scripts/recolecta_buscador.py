@@ -3,7 +3,7 @@ import datetime
 import pytz
 import json
 from utils_database import scaffold_database, insert_recolecta_buscador_request, \
-    insert_recolecta_buscador_records
+    insert_recolecta_buscador_records, get_recolecta_buscador_max_registration_number
 
 db_path = 'recolecta_corporaciones.db'
 buscador_url = 'https://rceapi.estado.pr.gov/api/corporation/search'
@@ -99,28 +99,45 @@ def get_puerto_rico_timestamp(verbose=False):
 # Ready database
 scaffold_database(db_path)
 
+while True:
+    # Get max registration number
+    starting_registration_number = get_recolecta_buscador_max_registration_number(db_path)
+    print('Starting registration number:', starting_registration_number)
 
-# Post request
-payload = get_buscador_payload()
-comparison = get_comparison('Mayor que', 0)
-payload.update(comparison)
+    # Post request
+    record_limit = 1000
+    payload = get_buscador_payload(limit = record_limit)
+    comparison = get_comparison('Mayor o igual que', starting_registration_number)
+    payload.update(comparison)
 
-timestamp = get_puerto_rico_timestamp()
-print('Timestamp:', timestamp)
-r = requests.post(buscador_url, json=payload)
-print(r.status_code)
-r.raise_for_status()
+    timestamp = get_puerto_rico_timestamp()
+    print('Timestamp:', timestamp)
+    r = requests.post(buscador_url, json=payload)
+    print(r.status_code)
+    r.raise_for_status()
 
-request_id = insert_recolecta_buscador_request(db_path, timestamp)
-print('Request ID:', request_id)
+    request_id = insert_recolecta_buscador_request(db_path, timestamp)
+    print('Request ID:', request_id)
 
 
 
-# Save to file
-json_response = r.json()
-with open('buscador_response.json', 'w') as f:
-    json.dump(json_response, f)
+    # Save to file
+    json_response = r.json()
+    with open('buscador_response.json', 'w') as f:
+        json.dump(json_response, f)
 
-records = json_response['response']['records']
-insert_recolecta_buscador_records(db_path, request_id, records)
-# print(r.json())
+    records = json_response['response']['records']
+    total_records = json_response['response']['totalRecords']
+    if total_records == 0:
+        raise ValueError('No records found. TODO: handle this case')
+    records_registration_numbers = [r['registrationNumber'] for r in records]
+
+    if (min(records_registration_numbers) == max(records_registration_numbers)):
+        raise ValueError('The registration number did not increase. TODO: handle this case')
+
+    if total_records < record_limit:
+        raise ValueError('The total records is less than the record limit. TODO: handle this case')
+
+    insert_recolecta_buscador_records(db_path, request_id, records)
+    # print(r.json())
+    print()

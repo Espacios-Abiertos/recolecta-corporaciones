@@ -81,10 +81,9 @@ recolecta_buscador_record_variable_name_inverse_mapping = {
 def insert_recolecta_buscador_records(db_path, request_id, records):
     columns = tuple(recolecta_buscador_record_variable_name_mapping.values())
     original_columns = tuple(recolecta_buscador_record_variable_name_inverse_mapping[k] for k in columns)
-    print('Columns:', columns)
-
-    print('Columns string:', ', '.join(columns))
-    print('Original columns:', original_columns)
+    # print('Columns:', columns)
+    # print('Columns string:', ', '.join(columns))
+    # print('Original columns:', original_columns)
 
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
@@ -100,3 +99,14 @@ def insert_recolecta_buscador_records(db_path, request_id, records):
 
     conn.commit()
     conn.close()
+
+def get_recolecta_buscador_max_registration_number(db_path):
+    conn = sqlite3.connect(db_path)
+    c = conn.cursor()
+    c.execute('''
+        SELECT MAX(registration_number) FROM recolecta_buscador__records;
+    ''')
+    max_registration_number = c.fetchone()[0]
+    conn.close()
+
+    return max_registration_number
