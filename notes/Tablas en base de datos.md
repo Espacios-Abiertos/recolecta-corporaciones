@@ -19,8 +19,8 @@ Este documento sirve para documentar sobre las tablas presentes en la base de da
 "record_id" es el primary key. "request_id" es el foreign key apuntando a cual request dio ese record. Dejandonos llevar por los enlaces de la página del registro de corporaciones, deberiamos usar el registration index para segmentar IDs.
 
 ```sql
-select distinct registration_index, corp_name
-from recolecta_buscador__records
+select distinct registration_index, corp_name, status_id, status_es
+from recolecta_corporaciones.recolecta_buscador__records
 order by record_id
 ```
 
