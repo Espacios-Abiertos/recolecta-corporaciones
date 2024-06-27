@@ -128,9 +128,12 @@ while True:
 
     records = json_response['response']['records']
     total_records = json_response['response']['totalRecords']
+    print('Total records:', total_records)
     if total_records == 0:
         raise ValueError('No records found. TODO: handle this case')
     records_registration_numbers = [r['registrationNumber'] for r in records]
+
+    insert_recolecta_buscador_records(db_path, request_id, records)
 
     if (min(records_registration_numbers) == max(records_registration_numbers)):
         raise ValueError('The registration number did not increase. TODO: handle this case')
@@ -138,6 +141,6 @@ while True:
     if total_records < record_limit:
         raise ValueError('The total records is less than the record limit. TODO: handle this case')
 
-    insert_recolecta_buscador_records(db_path, request_id, records)
+    
     # print(r.json())
     print()
