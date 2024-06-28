@@ -2,6 +2,7 @@
 # con los registration_index (los IDs) de
 # las entidades del Registro de Corporaciones
 
+import os
 import duckdb
 import polars as pl
 from utils_database import read_query
@@ -27,23 +28,26 @@ print()
 # Get search matches for grantees without exact matches
 con.execute('''
 create or replace table grantee_search_matches (
-            grantee VARCHAR, registration_index VARCHAR,
-            corp_name VARCHAR, status_id INTEGER,
-            status_es VARCHAR, score DOUBLE
+            grantee VARCHAR NOT NULL,
+            registration_index VARCHAR NOT NULL,
+            corp_name VARCHAR NOT NULL,
+            status_id INTEGER, status_es VARCHAR, score DOUBLE,
+
+            primary key (grantee, registration_index)
 );
 ''')
 for i, grantee in enumerate(grantees_without_exact_match):
-    # print(f'{i+1}/{len(grantees_without_exact_match)}:', grantee)
-    r1 = con.sql(f"execute corporaciones_fts_query('{grantee}', 1)")
+    print(f'{i+1}/{len(grantees_without_exact_match)}:', grantee)
+    grantee_escaped = grantee.replace("'","''")
+    r1 = con.sql(f"execute corporaciones_fts_query('{grantee_escaped}', 1)")
     # print('r1:', r1, sep='\n')
-    grantee_search_result = con.sql(f'''select '{grantee}' as grantee, * from r1''')
+    grantee_search_result = con.sql(f'''select '{grantee_escaped}' as grantee, * from r1''')
     # print('grantee_search_result:', grantee_search_result, sep='\n')
     print(f'{i+1}/{len(grantees_without_exact_match)}:', grantee, '-->', grantee_search_result.fetchone()[2])
 
+    # Change to insert
     con.execute('''
-    create or replace table grantee_search_matches as (
-        from grantee_search_matches
-        union all by name
+    insert into grantee_search_matches by name (
         from grantee_search_result
     )
     ''')
@@ -52,7 +56,7 @@ for i, grantee in enumerate(grantees_without_exact_match):
     # print('grantee_search_matches:', grantee_search_matches, sep='\n')
     # print()
 
-    if i >= 10 - 1:
+    if i+1 >= 20:
         break
 
 # maybe not necessary yet
@@ -61,25 +65,29 @@ for i, grantee in enumerate(grantees_without_exact_match):
 grantee_search_matches = con.sql('from grantee_search_matches')
 print('grantee_search_matches:', grantee_search_matches, sep='\n')
 
+con.execute('drop table if exists grantee_candidate_matches') # COMMENT OUT LATER
 con.execute('''
 create table if not exists grantee_candidate_matches (
             -- same as grantee_search_matches
-            grantee VARCHAR, registration_index VARCHAR,
-            corp_name VARCHAR, status_id INTEGER,
+            grantee VARCHAR NOT NULL,
+            registration_index VARCHAR NOT NULL,
+            corp_name VARCHAR NOT NULL,
+            status_id INTEGER,
             status_es VARCHAR, score DOUBLE,
 
             -- just adding these columns to the grantee_search_matches schema
             aprobado VARCHAR, rechazado VARCHAR,
-            evaluado BOOLEAN
+            evaluado BOOLEAN generated always as (
+             (aprobado is not null) or (rechazado is not null)
+             ) virtual,
+            
+            primary key (grantee, registration_index)
 );
 ''')
-con.execute('''
-update grantee_candidate_matches set evaluado =   (
-            (aprobado is not null) or (rechazado is not null)
-            );       
-''')
 # con.execute('''
-# update          
+# update grantee_candidate_matches set evaluado =   (
+#             (aprobado is not null) or (rechazado is not null)
+#             );       
 # ''')
 
 print('grantee_candidate_matches (before)')
@@ -87,36 +95,124 @@ print(con.sql('from grantee_candidate_matches'))
 
 # Add new candidates as needed
 # while keeping evaluados safe
-con.execute(
-'''
-create or replace table grantee_candidate_matches as (
-with grantee_candidate_matches_evaluado as (
-    from grantee_candidate_matches
-    where evaluado = true
-),
 
-grantee_candidate_matches_no_evaluado as (
-    select grantee_search_matches.*, 
-        aprobado, rechazado,
-        case when grantee_candidate_matches.evaluado is null
-              then false
-              else grantee_candidate_matches.evaluado
-              end as new_evaluado,
+# con.execute('delete from grantee_candidate_matches where evaluado = false')
+
+# check if os isfile
+
+# COMMENT LATER
+# if os.path.isfile('manual_editing/grantee_candidate_matches.csv'):
+#     os.remove('manual_editing/grantee_candidate_matches.csv')
+
+if os.path.isfile('manual_editing/grantee_candidate_matches.csv'):
+    con.execute(
+    '''
+    create or replace table grantee_candidate_matches_editing (
+        registration_index VARCHAR NOT NULL,
+        grantee VARCHAR NOT NULL,
+        corp_name VARCHAR NOT NULL,
+        aprobado VARCHAR, rechazado VARCHAR
+    )
+    '''
+    )
+    con.execute(
+    '''
+    insert into grantee_candidate_matches_editing by name (
+        select * from read_csv_auto('manual_editing/grantee_candidate_matches.csv')
+    )
+    '''
+    )
+
+    # Insert evaluados nuevos
+    con.execute(
+    '''
+    insert into grantee_candidate_matches by name (
+        from grantee_candidate_matches_editing
+        --anti join grantee_candidate_matches
+        --using (grantee, corp_name)
+        --where (grantee_candidate_matches_editing.aprobado is not null)
+        --    or (grantee_candidate_matches_editing.rechazado is not null)
+    )
+    on conflict do update set aprobado = excluded.aprobado, rechazado = excluded.rechazado
+    '''
+    )
+
+    # Update evaluados nuevos
+    con.execute('''
+    update grantee_candidate_matches
+        set status_id = grantee_search_matches.status_id,
+            status_es = grantee_search_matches.status_es,
+            score = grantee_search_matches.score
     from grantee_search_matches
-    left join grantee_candidate_matches
-    using (grantee, registration_index)
-    where new_evaluado = false
-)
+    where grantee_candidate_matches.grantee = grantee_search_matches.grantee
+        and grantee_candidate_matches.registration_index = grantee_search_matches.registration_index
+        and grantee_candidate_matches.corp_name = grantee_search_matches.corp_name
+    ''')
 
-select * exclude (new_evaluado), new_evaluado as evaluado
-from grantee_candidate_matches_no_evaluado
-union all by name
-from grantee_candidate_matches_evaluado
+print('grantee_candidate_matches (after csv insert)')
+print(con.sql('from grantee_candidate_matches'))
 
-);
+
+# print('Gonna insert these rows:')
+# print(con.sql(
+# '''
+# with evaluated_candidate_matches as (
+#         from grantee_candidate_matches
+#         where evaluado = true
+#     )
+
+#     from grantee_search_matches
+#     anti join evaluated_candidate_matches
+#     using (grantee, corp_name)
+# '''
+# ))
+con.execute('''
+insert into grantee_candidate_matches by name (
+    with evaluated_candidate_matches as (
+        from grantee_candidate_matches
+        where evaluado = true
+    )
+
+    from grantee_search_matches
+    anti join evaluated_candidate_matches
+    using (grantee, corp_name)    
+) on conflict do nothing     
 ''')
+# con.execute(
+# '''
+# create or replace table grantee_candidate_matches as (
+# with grantee_candidate_matches_evaluado as (
+#     from grantee_candidate_matches
+#     where evaluado = true
+# ),
+
+# grantee_candidate_matches_no_evaluado as (
+#     select grantee_search_matches.*, 
+#         aprobado, rechazado,
+#         coalesce(grantee_candidate_matches.evaluado, false) as new_evaluado
+#     from grantee_search_matches
+#     left join grantee_candidate_matches
+#     using (grantee, registration_index)
+#     where new_evaluado = false
+# )
+
+# select * exclude (new_evaluado), new_evaluado as evaluado
+# from grantee_candidate_matches_no_evaluado
+# union all by name
+# from grantee_candidate_matches_evaluado
+
+# );
+# ''')
 
 print('grantee_candidate_matches (after)')
 print(con.sql('from grantee_candidate_matches'))
+
+grantee_candidate_matches_editing = con.sql(
+'''
+select registration_index, grantee, corp_name, aprobado, rechazado
+from grantee_candidate_matches
+order by evaluado, score desc
+''').pl()
+grantee_candidate_matches_editing.write_csv('manual_editing/grantee_candidate_matches.csv')
 
 con.close()

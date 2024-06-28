@@ -11,6 +11,7 @@ create or replace table decretos as (
 create or replace table beneficiarios as (
     select distinct grantee
     from decretos
+    where grantee is not null
     order by decree_id
 );
 
@@ -46,6 +47,7 @@ prepare corporaciones_fts_query as (
     select *
     from scored_corps
     where score is not null
-    order by status_id = 1 desc, score desc
+    -- order by status_id = 1 desc, score desc
+    order by score desc
     limit $2
 );
