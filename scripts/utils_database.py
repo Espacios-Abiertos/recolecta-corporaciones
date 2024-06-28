@@ -1,5 +1,10 @@
 import sqlite3
 
+def read_query(query_name):
+    with open(f'scripts/sql/{query_name}.sql', 'r') as f:
+        query = f.read()
+    return query
+
 def scaffold_database(db_path):
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
