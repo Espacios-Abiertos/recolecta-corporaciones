@@ -27,7 +27,7 @@ print()
 
 # Get search matches for grantees without exact matches
 con.execute('''
-create or replace table grantee_search_matches (
+create table if not exists grantee_search_matches (
             grantee VARCHAR NOT NULL,
             registration_index VARCHAR NOT NULL,
             corp_name VARCHAR NOT NULL,
@@ -36,28 +36,37 @@ create or replace table grantee_search_matches (
             primary key (grantee, registration_index)
 );
 ''')
-for i, grantee in enumerate(grantees_without_exact_match):
-    print(f'{i+1}/{len(grantees_without_exact_match)}:', grantee)
+
+grantees_that_need_search = con.sql('''
+select grantee from (from exact_matches where match_type is null)
+anti join grantee_search_matches
+using (grantee)    
+''').pl().to_series().to_list()
+print('Num grantees needing search:', len(grantees_that_need_search))
+print()
+
+for i, grantee in enumerate(grantees_that_need_search):
+    print(f'{i+1}/{len(grantees_that_need_search)}:', grantee)
     grantee_escaped = grantee.replace("'","''")
     r1 = con.sql(f"execute corporaciones_fts_query('{grantee_escaped}', 1)")
     # print('r1:', r1, sep='\n')
     grantee_search_result = con.sql(f'''select '{grantee_escaped}' as grantee, * from r1''')
     # print('grantee_search_result:', grantee_search_result, sep='\n')
-    print(f'{i+1}/{len(grantees_without_exact_match)}:', grantee, '-->', grantee_search_result.fetchone()[2])
+    print(f'{i+1}/{len(grantees_that_need_search)}:', grantee, '-->', grantee_search_result.fetchone()[2])
 
     # Change to insert
     con.execute('''
     insert into grantee_search_matches by name (
         from grantee_search_result
-    )
+    ) on conflict do nothing
     ''')
     
     
     # print('grantee_search_matches:', grantee_search_matches, sep='\n')
     # print()
 
-    if i+1 >= 20:
-        break
+    # if i+1 >= 20:
+    #     break
 
 # maybe not necessary yet
 # con.execute("alter table grantee_search_matches add column match_type varchar default 'search'")
@@ -214,5 +223,7 @@ from grantee_candidate_matches
 order by evaluado, score desc
 ''').pl()
 grantee_candidate_matches_editing.write_csv('manual_editing/grantee_candidate_matches.csv')
+
+print(con.sql('select evaluado, count(*) from grantee_candidate_matches group by evaluado'))
 
 con.close()
