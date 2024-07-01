@@ -213,8 +213,31 @@ insert into grantee_candidate_matches by name (
 # );
 # ''')
 
+con.execute('''
+create or replace view grantee_matches as (
+with grantee_candidate_matches_aprobados as (
+    select *, 'search_aprobado' as match_type
+    from grantee_candidate_matches
+    where aprobado is not null
+)
+            
+select grantee, registration_index, corp_name, status_es, match_type from exact_matches where match_type = 'exact'
+union all by name
+select grantee, registration_index, corp_name, status_es, match_type from grantee_candidate_matches_aprobados
+)
+''')
+
 print('grantee_candidate_matches (after)')
 print(con.sql('from grantee_candidate_matches'))
+print('Para ver los más repetidos (usually more means more generic trash matches):')
+print(con.sql('select corp_name, count(*) as thecount from grantee_candidate_matches group by all order by thecount desc'))
+print('Distribución de estatus grantee_candidate_matches:')
+print(con.sql('select status_es, count(*) as thecount from grantee_candidate_matches group by all order by thecount desc'))
+print('Distribución de estatus grantee_matches:')
+print(con.sql('select status_es, count(*) as thecount from grantee_matches group by all order by thecount desc'))
+
+grantee_matches = con.sql('from grantee_matches').pl()
+grantee_matches.write_csv('outputs/grantee_matches.csv')
 
 grantee_candidate_matches_editing = con.sql(
 '''
