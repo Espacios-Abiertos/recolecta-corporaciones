@@ -25,7 +25,7 @@ class Worker(multiprocessing.Process):
                 break
 
             # Actual code
-            print(f"({corp['i']+1}/{self.num_corporations_to_recolectar}) {corp['registration_index']} {corp['corp_name']}")
+            print(f"({corp['i']+1}/{self.num_corporations_to_recolectar}) {corp['registration_index']} {corp.get('corp_name')}")
             fpath = os.path.join(incremental_dir, corp['registration_index'] + '.json')
 
             if os.path.isfile(fpath):
@@ -104,8 +104,8 @@ if __name__ == '__main__':
     corporations_to_recolectar_rel = con.sql('from corporations_to_recolectar')
 
     corporations_to_recolectar = [
-        {'i': i, 'registration_index': row[0], 'corp_name': row[1], 'status_es': row[2]}
-        for (i,row) in enumerate(corporations_to_recolectar_rel.fetchall())
+        {'registration_index': row[0], 'corp_name': row[1], 'status_es': row[2]}
+        for row in corporations_to_recolectar_rel.fetchall()
     ]
     corporations_to_recolectar = [
         c for c in corporations_to_recolectar
@@ -115,6 +115,50 @@ if __name__ == '__main__':
     ]
 
     con.close()
+
+    for registration_index in [
+        '14775-112',
+        '345407-112',
+        '497853-1512',
+        '442554-1512',
+        '13513-112',
+        '94-1532',
+        '420029-112',
+        '420029-112',
+        '158298-111',
+        '11316-112',
+        '365083-112',
+        '436940-112',
+        '378248-1512',
+        '348907-112',
+        '353626-111',
+        '310836-111',
+        '1106-112',
+        '1140-1532',
+        '109-1532',
+        '511013-1512',
+        '895-1532',
+        '435331-1512',
+        '416-122',
+        '10423-112',
+        '324-1532',
+        '353626-111',
+        '490481-1512',
+        '1166-1532',
+        '13235-112',
+        '372762-112',
+        '432772-1511',
+        '12905-112',
+        '12-1532',
+        '505906-1512',
+        '372762-112',
+        '403112-112',
+        '436940-112',
+    ]:
+        corporations_to_recolectar.append({
+            'registration_index': registration_index,
+            # 'corp_name': None,
+        })
     num_corporations_to_recolectar = len(corporations_to_recolectar)
     # for (i,corp) in enumerate(corporations_to_recolectar):
     #     print(f"({i+1}/{num_corporations_to_recolectar}) {corp['registration_index']} {corp['corp_name']}")
@@ -169,7 +213,8 @@ if __name__ == '__main__':
         workers.append(p)
         p.start()
 
-    for corp in corporations_to_recolectar:
+    for (i,corp) in enumerate(corporations_to_recolectar):
+        corp['i'] = i
         job_queue.put(corp)
 
     # To signal the workers to stop after done
