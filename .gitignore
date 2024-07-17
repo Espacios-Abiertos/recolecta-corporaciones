@@ -1,4 +1,6 @@
 recolectas_incrementales/corporation_info/*
+recolectas_incrementales/related_entities/*
+~$*.xlsx
 .DS_Store
 
 # Byte-compiled / optimized / DLL files
