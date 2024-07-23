@@ -117,8 +117,11 @@ for fname in orbis_result_files:
     print()
 
 
-orbis_results_over_threshold = pl.concat(orbis_results_over_threshold)
+orbis_results_over_threshold: pl.DataFrame = pl.concat(orbis_results_over_threshold)
 print(orbis_results_over_threshold)
 
 orbis_results_over_threshold.write_excel('outputs/orbis_results_over_threshold.xlsx')
+(orbis_results_over_threshold
+ .select(pl.exclude('operating_revenue_yearly_values'))
+ ).write_csv('outputs/orbis_results_over_threshold.csv')
 orbis_results_over_threshold.write_parquet('outputs/orbis_results_over_threshold.parquet')
