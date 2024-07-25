@@ -306,6 +306,10 @@ using (model_data_global_parent_bvdid, "year")
 )
 print('parent_companies_with_pillar2_status_rel')
 print(parent_companies_with_pillar2_status_rel)
+duckdb.sql(f'''
+copy parent_companies_with_pillar2_status_rel to '{orbis_results_output_dir}/parent_companies_with_pillar2_status_rel.xlsx' WITH (FORMAT GDAL, DRIVER 'xlsx')
+''')
+print(f'Exported to {orbis_results_output_dir}/parent_companies_with_pillar2_status_rel.xlsx')
 
 # import sys; sys.exit()
 
@@ -347,3 +351,21 @@ order by num_corps_boricuas desc
 print('display_parent_companies_with_pillar2_status_2025_rel')
 print(display_parent_companies_with_pillar2_status_2025_rel)
 
+rel = duckdb.sql(
+'''
+-- Ernst & Young (US245251451L) tiene solo US (parent), US (filiales) y BN Brunei Darussalam (filial)
+-- so lo que pasa es que no hay info para BN y el US es parent
+-- so el UTPR para E&Y de PR aparece vacio (NULL)
+-- Solucion: rellenar pwc data para BN
+
+-- Alera Group (US*4000000225888) tiene parent en US y filiales en US y LB Lebanon
+-- same as before, no hay info sobre LB en el PWC report
+-- Solucion: rellenar pwc data para LB
+
+select list(distinct country_iso_code)
+from orbis_network_results
+where model_data_global_parent_bvdid = 'US*4000000225888'
+'''
+)
+print('rel')
+print(rel)
