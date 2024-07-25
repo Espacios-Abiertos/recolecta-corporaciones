@@ -5,6 +5,7 @@
 import os
 
 import duckdb
+import polars as pl
 from utils_database import read_query
 
 orbis_results_name = 'orbis_network_results_2024_07_23' # corresponde al directorio a abrir dentro de 'outputs/'
@@ -306,9 +307,10 @@ using (model_data_global_parent_bvdid, "year")
 )
 print('parent_companies_with_pillar2_status_rel')
 print(parent_companies_with_pillar2_status_rel)
-duckdb.sql(f'''
-copy parent_companies_with_pillar2_status_rel to '{orbis_results_output_dir}/parent_companies_with_pillar2_status_rel.xlsx' WITH (FORMAT GDAL, DRIVER 'xlsx')
-''')
+# duckdb.sql(f'''
+# copy parent_companies_with_pillar2_status_rel to '{orbis_results_output_dir}/parent_companies_with_pillar2_status_rel.xlsx' WITH (FORMAT GDAL, DRIVER 'xlsx')
+# ''')
+parent_companies_with_pillar2_status_rel.pl().write_excel(f'{orbis_results_output_dir}/parent_companies_with_pillar2_status_rel.xlsx')
 print(f'Exported to {orbis_results_output_dir}/parent_companies_with_pillar2_status_rel.xlsx')
 
 # import sys; sys.exit()
