@@ -148,6 +148,42 @@ order by parent_company_name, boricua_corp_name
 print('display_corp_boricuas_with_orbis_parent_rel')
 print(display_corp_boricuas_with_orbis_parent_rel)
 
+# orbis_network_utpr_rel = duckdb.sql(
+# '''
+# with subsidiaries as (
+#     from orbis_network_results
+#     where bvd_id_orbis != model_data_global_parent_bvdid
+#         and branch_indicator = 'No'
+# ),
+
+# parents_with_subsidiary_countries as (
+#     select distinct model_data_global_parent_bvdid, country_iso_code as subsidiary_country_code
+#     from subsidiaries
+#     group by all
+# ),
+
+# utpr_calc_sheet as (
+#     select
+#         model_data_global_parent_bvdid, subsidiary_country_code,
+#         country as subsidiary_country, "year",
+#         -- pillar2, iir, qdmtt, 
+#         utpr,
+#         case when utpr = 'Yes' then TRUE when utpr = 'No' then FALSE else NULL end as utpr_bool,
+#         list(utpr_bool) over (partition by model_data_global_parent_bvdid, "year") as utpr_bool_list,
+#         utpr_bool_list.list_filter(x -> x).len() > 0 as utpr_bool_any
+#     from parents_with_subsidiary_countries
+#     left join pillar2_pwc_report
+#     on parents_with_subsidiary_countries.subsidiary_country_code = pillar2_pwc_report.country_code
+    
+# )
+
+# select distinct model_data_global_parent_bvdid, "year", utpr_bool_any, case when utpr_bool_any then 'Yes' else 'No' end as utpr_any,
+# --select distinct subsidiary_country_code
+# from utpr_calc_sheet
+# --where "subsidiary_country" is not null -- Eliminar corps que no pudimos match al Pillar2 report
+# -- order by model_data_global_parent_bvdid, "year", subsidiary_country_code
+# '''
+# )
 orbis_network_utpr_rel = duckdb.sql(
 '''
 with subsidiaries as (
@@ -156,36 +192,83 @@ with subsidiaries as (
         and branch_indicator = 'No'
 ),
 
+companies_with_tax_country as (
+    select *,
+        case when state = 'PR' then 'PR' else country_iso_code end
+        as tax_country_iso_code,
+    from orbis_network_results
+),
+
+companies_with_parent_tax_country as (
+    select comps_1.*, comps_2.tax_country_iso_code as parent_tax_country_iso_code
+    from companies_with_tax_country as comps_1
+    left join companies_with_tax_country as comps_2
+    on comps_1.model_data_global_parent_bvdid = comps_2.bvd_id_orbis
+    where comps_1.model_data_global_parent_bvdid is not null
+),
+
 parents_with_subsidiary_countries as (
-    select distinct model_data_global_parent_bvdid, country_iso_code as subsidiary_country_code
-    from subsidiaries
+    select
+        model_data_global_parent_bvdid, parent_tax_country_iso_code,
+        list(distinct tax_country_iso_code) FILTER (
+            bvd_id_orbis != model_data_global_parent_bvdid and branch_indicator = 'No' -- elegir subsidiarias
+            and tax_country_iso_code != parent_tax_country_iso_code -- excluir home country (solo mirar internacional del home del parent)
+        ) as international_subsidiary_tax_country_codes
+    from companies_with_parent_tax_country
+    group by model_data_global_parent_bvdid, parent_tax_country_iso_code
+),
+
+parents_lacking_subsidiaries as (
+    from parents_with_subsidiary_countries
+    where international_subsidiary_tax_country_codes is null
+),
+
+parents_having_subsidiaries as (
+    from parents_with_subsidiary_countries
+    where international_subsidiary_tax_country_codes is not null
+),
+
+parent_subsidiary_country_combinations as (
+    select model_data_global_parent_bvdid, parent_tax_country_iso_code,
+        unnest(international_subsidiary_tax_country_codes) as international_subsidiary_tax_country_code
+    from parents_having_subsidiaries
+),
+
+parents_with_international_subsidiary_utprs as (
+    select parent_subsidiary_country_combinations.*,
+        pillar2_pwc_report."year",
+        pillar2_pwc_report.utpr as international_country_utpr_yesno,
+        case when international_country_utpr_yesno = 'Yes' then TRUE when international_country_utpr_yesno = 'No' then FALSE else NULL end as international_country_utpr_bool,
+    from parent_subsidiary_country_combinations
+    left join pillar2_pwc_report
+    on parent_subsidiary_country_combinations.international_subsidiary_tax_country_code = pillar2_pwc_report.country_code
+    where pillar2_pwc_report."year" is not null -- ocurre cuando no hay un match entre paises pq no esta disponible la info (ej. RU, TZ, MW)
+), 
+
+parents_having_subsidiaries_with_utpr_calc as (
+    select
+        model_data_global_parent_bvdid, parent_tax_country_iso_code, "year",
+        list(international_country_utpr_bool).list_filter(x -> x).len() > 0
+            as parent_subject_to_utpr,
+    from parents_with_international_subsidiary_utprs
     group by all
 ),
 
-utpr_calc_sheet as (
-    select
-        model_data_global_parent_bvdid, subsidiary_country_code,
-        country as subsidiary_country, "year",
-        -- pillar2, iir, qdmtt, 
-        utpr,
-        case when utpr = 'Yes' then TRUE when utpr = 'No' then FALSE else NULL end as utpr_bool,
-        list(utpr_bool) over (partition by model_data_global_parent_bvdid, "year") as utpr_bool_list,
-        utpr_bool_list.list_filter(x -> x).len() > 0 as utpr_bool_any
-    from parents_with_subsidiary_countries
-    left join pillar2_pwc_report
-    on parents_with_subsidiary_countries.subsidiary_country_code = pillar2_pwc_report.country_code
-    
+parents_lacking_subsidiaries_with_utpr_calc as (
+select model_data_global_parent_bvdid, parent_tax_country_iso_code,
+    unnest([2024, 2025, 2026]) as "year", FALSE as parent_subject_to_utpr
+from parents_lacking_subsidiaries
 )
 
-select distinct model_data_global_parent_bvdid, "year", utpr_bool_any, case when utpr_bool_any then 'Yes' else 'No' end as utpr_any,
---select distinct subsidiary_country_code
-from utpr_calc_sheet
---where "subsidiary_country" is not null -- Eliminar corps que no pudimos match al Pillar2 report
--- order by model_data_global_parent_bvdid, "year", subsidiary_country_code
+from parents_having_subsidiaries_with_utpr_calc
+union all by name
+from parents_lacking_subsidiaries_with_utpr_calc
+order by model_data_global_parent_bvdid, "year"
 '''
 )
 print('orbis_network_utpr_rel')
 print(orbis_network_utpr_rel)
+print(duckdb.sql('select count() from orbis_network_utpr_rel'))
 
 parent_companies_with_pillar2_status_rel = duckdb.sql(
 '''
@@ -193,7 +276,9 @@ with parents_with_bori_corps_count as (
     select
     model_data_global_parent_bvdid, parent_company_name,
     count(distinct company_number_pr) as num_corps_boricuas,
-    parent_country_iso_code,
+    -- parent_country_iso_code,
+    case when parent_state = 'PR' then 'PR' else parent_country_iso_code end
+        as parent_tax_country_iso_code,
 
     from corp_boricuas_with_orbis_parent_rel
     group by all
@@ -201,54 +286,64 @@ with parents_with_bori_corps_count as (
 
 parents_with_pwc_data as (
     select parents_with_bori_corps_count.*,
-    country as parent_country, "year", pillar2, iir, qdmtt, utpr
+    country as parent_country, "year", pillar2, iir, qdmtt, --utpr
     from parents_with_bori_corps_count
     left join pillar2_pwc_report
-    on parents_with_bori_corps_count.parent_country_iso_code = pillar2_pwc_report.country_code
+    on parents_with_bori_corps_count.parent_tax_country_iso_code = pillar2_pwc_report.country_code
 )
 
 -- select parents_with_pwc_data.* replace (utpr_any as utpr)
+select parents_with_pwc_data.*, 
+    case when parent_subject_to_utpr is TRUE then 'Yes'
+         when parent_subject_to_utpr is FALSE then 'No'
+         END as utpr
 from parents_with_pwc_data
 
---left join orbis_network_utpr_rel
---using (model_data_global_parent_bvdid, "year")
+left join orbis_network_utpr_rel
+using (model_data_global_parent_bvdid, "year")
 -- where utpr_bool_any is null
 '''
 )
 print('parent_companies_with_pillar2_status_rel')
 print(parent_companies_with_pillar2_status_rel)
 
-rel = duckdb.sql(
+# import sys; sys.exit()
+
+# rel = duckdb.sql(
+# '''
+# -- from orbis_network_utpr_rel
+# --from orbis_network_results
+# from parent_companies_with_pillar2_status_rel
+# --where model_data_global_parent_bvdid = 'US314879018L'
+# --where model_data_global_parent_bvdid = bvd_id_orbis
+# '''
+# )
+# print('rel')
+# print(rel)
+
+# El asunto es que entendemos como funciona el caso de UTPR con un wide gamma de subsidiarias
+# pero nos trancamos en los base cases. What if no tienes susbidiarias? (e.j. US314879018L que es solo "parent" pero de nadie)
+# what if tienes una subsidiaria en tu propio pais? O sea como manejas el pais del parent manejando UTPR
+
+display_parent_companies_with_pillar2_status_2024_rel = duckdb.sql(
 '''
--- from orbis_network_utpr_rel
---from orbis_network_results
+select parent_company_name, num_corps_boricuas, parent_tax_country_iso_code, iir, qdmtt,
 from parent_companies_with_pillar2_status_rel
---where model_data_global_parent_bvdid = 'US314879018L'
---where model_data_global_parent_bvdid = bvd_id_orbis
+where "year" = 2024
+order by num_corps_boricuas desc
 '''
 )
-print('rel')
-print(rel)
+print('display_parent_companies_with_pillar2_status_2024_rel')
+print(display_parent_companies_with_pillar2_status_2024_rel)
 
-# display_parent_companies_with_pillar2_status_2024_rel = duckdb.sql(
-# '''
-# select parent_company_name, num_corps_boricuas, parent_country_iso_code, iir, qdmtt,
-# from parent_companies_with_pillar2_status_rel
-# where "year" = 2024
-# order by num_corps_boricuas desc
-# '''
-# )
-# print('display_parent_companies_with_pillar2_status_2024_rel')
-# print(display_parent_companies_with_pillar2_status_2024_rel)
-
-# display_parent_companies_with_pillar2_status_2025_rel = duckdb.sql(
-# '''
-# select parent_company_name, num_corps_boricuas, parent_country_iso_code, iir, qdmtt, 'TODO' as utpr
-# from parent_companies_with_pillar2_status_rel
-# where "year" = 2025
-# order by num_corps_boricuas desc
-# '''
-# )
-# print('display_parent_companies_with_pillar2_status_2025_rel')
-# print(display_parent_companies_with_pillar2_status_2025_rel)
+display_parent_companies_with_pillar2_status_2025_rel = duckdb.sql(
+'''
+select parent_company_name, num_corps_boricuas, parent_tax_country_iso_code, iir, qdmtt, utpr
+from parent_companies_with_pillar2_status_rel
+where "year" = 2025
+order by num_corps_boricuas desc
+'''
+)
+print('display_parent_companies_with_pillar2_status_2025_rel')
+print(display_parent_companies_with_pillar2_status_2025_rel)
 
