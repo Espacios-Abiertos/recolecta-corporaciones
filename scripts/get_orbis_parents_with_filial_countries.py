@@ -313,23 +313,24 @@ print(parent_companies_with_pillar2_status_rel)
 parent_companies_with_pillar2_status_rel.pl().write_excel(f'{orbis_results_output_dir}/parent_companies_with_pillar2_status_rel.xlsx')
 print(f'Exported to {orbis_results_output_dir}/parent_companies_with_pillar2_status_rel.xlsx')
 
+parent_countries_with_pillar2_status_rel = duckdb.sql(
+'''
+select parent_tax_country_iso_code, parent_country, "year",
+    sum(num_corps_boricuas)::INT as num_corps_boricuas,
+    count() as num_parents,
+    count() FILTER (iir = 'Yes') as num_parents_with_iir,
+    count() FILTER (qdmtt = 'Yes') as num_parents_with_qdmtt,
+    count() FILTER (utpr = 'Yes') as num_parents_with_utpr,
+from parent_companies_with_pillar2_status_rel
+group by all
+'''
+)
+print('parent_countries_with_pillar2_status_rel')
+print(parent_countries_with_pillar2_status_rel)
+parent_countries_with_pillar2_status_rel.pl().write_excel(f'{orbis_results_output_dir}/parent_countries_with_pillar2_status_rel.xlsx')
+print(f'Exported to {orbis_results_output_dir}/parent_countries_with_pillar2_status_rel.xlsx')
+
 # import sys; sys.exit()
-
-# rel = duckdb.sql(
-# '''
-# -- from orbis_network_utpr_rel
-# --from orbis_network_results
-# from parent_companies_with_pillar2_status_rel
-# --where model_data_global_parent_bvdid = 'US314879018L'
-# --where model_data_global_parent_bvdid = bvd_id_orbis
-# '''
-# )
-# print('rel')
-# print(rel)
-
-# El asunto es que entendemos como funciona el caso de UTPR con un wide gamma de subsidiarias
-# pero nos trancamos en los base cases. What if no tienes susbidiarias? (e.j. US314879018L que es solo "parent" pero de nadie)
-# what if tienes una subsidiaria en tu propio pais? O sea como manejas el pais del parent manejando UTPR
 
 display_parent_companies_with_pillar2_status_2024_rel = duckdb.sql(
 '''
