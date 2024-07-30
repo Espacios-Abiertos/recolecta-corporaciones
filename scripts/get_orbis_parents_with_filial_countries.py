@@ -62,6 +62,14 @@ create view qualified_companies_pr_orbis_search as (
 '''
 )
 
+duckdb.sql(
+'''
+create view qualified_parent_companies as (
+    from read_csv_auto('outputs/orbis_search_results_2024_07_21/qualified_parent_companies.csv')
+)
+'''
+)
+
 duckdb.sql('''
 create view countries_iso_data as (
     from read_csv_auto('inputs/ISO.csv')
@@ -291,14 +299,21 @@ parents_with_pwc_data as (
     from parents_with_bori_corps_count
     left join pillar2_pwc_report
     on parents_with_bori_corps_count.parent_tax_country_iso_code = pillar2_pwc_report.country_code
+),
+
+parents_with_pwc_and_revenue_data as (
+    from parents_with_pwc_data
+    left join qualified_parent_companies
+    using (model_data_global_parent_bvdid)
 )
 
 -- select parents_with_pwc_data.* replace (utpr_any as utpr)
-select parents_with_pwc_data.*, 
+select parents_with_pwc_and_revenue_data.* exclude (filial_operating_revenue_max_eur_th), 
     case when parent_subject_to_utpr is TRUE then 'Yes'
          when parent_subject_to_utpr is FALSE then 'No'
-         END as utpr
-from parents_with_pwc_data
+         END as utpr,
+    parents_with_pwc_and_revenue_data.filial_operating_revenue_max_eur_th,
+from parents_with_pwc_and_revenue_data
 
 left join orbis_network_utpr_rel
 using (model_data_global_parent_bvdid, "year")
@@ -321,6 +336,10 @@ select parent_tax_country_iso_code, parent_country, "year",
     count() FILTER (iir = 'Yes') as num_parents_with_iir,
     count() FILTER (qdmtt = 'Yes') as num_parents_with_qdmtt,
     count() FILTER (utpr = 'Yes') as num_parents_with_utpr,
+
+    sum(filial_operating_revenue_max_eur_th) as total_filial_operating_revenue_max_eur_th,
+    sum(filial_operating_revenue_max_eur_th) FILTER (utpr = 'Yes') as total_filial_operating_revenue_max_eur_th_with_utpr,
+
 from parent_companies_with_pillar2_status_rel
 group by all
 '''
