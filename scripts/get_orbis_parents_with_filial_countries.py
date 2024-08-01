@@ -72,7 +72,15 @@ create view qualified_parent_companies as (
 
 duckdb.sql('''
 create view countries_iso_data as (
-    from read_csv_auto('inputs/ISO.csv')
+    with paises_espanol as (
+        select code, country,
+        from 'inputs/paises.json'
+    )
+
+    select ISO.*, paises_espanol.country as country_es,       
+    from read_csv_auto('inputs/ISO.csv') as ISO
+    left join paises_espanol
+    on ISO."alpha-2" = paises_espanol.code
 )           
 ''')
 
@@ -330,11 +338,15 @@ print(f'Exported to {orbis_results_output_dir}/parent_companies_with_pillar2_sta
 
 parent_countries_with_pillar2_status_rel = duckdb.sql(
 '''
+with initial as (
 select parent_tax_country_iso_code, parent_country, "year",
-    sum(num_corps_boricuas)::INT as num_corps_boricuas,
     count() as num_parents,
-    count() FILTER (iir = 'Yes') as num_parents_with_iir,
+    sum(num_corps_boricuas)::INT as num_corps_boricuas,
+
+    first(qdmtt) as qdmtt, -- es constant per country y year so podemos elegir el first value
+    first(iir) as iir,
     count() FILTER (qdmtt = 'Yes') as num_parents_with_qdmtt,
+    count() FILTER (iir = 'Yes') as num_parents_with_iir,
     count() FILTER (utpr = 'Yes') as num_parents_with_utpr,
 
     sum(filial_operating_revenue_max_eur_th) as total_filial_operating_revenue_max_eur_th,
@@ -342,12 +354,121 @@ select parent_tax_country_iso_code, parent_country, "year",
 
 from parent_companies_with_pillar2_status_rel
 group by all
+)
+
+from initial
 '''
 )
 print('parent_countries_with_pillar2_status_rel')
 print(parent_countries_with_pillar2_status_rel)
 parent_countries_with_pillar2_status_rel.pl().write_excel(f'{orbis_results_output_dir}/parent_countries_with_pillar2_status_rel.xlsx')
 print(f'Exported to {orbis_results_output_dir}/parent_countries_with_pillar2_status_rel.xlsx')
+
+display_parent_countries_with_pillar2_status_rel = duckdb.sql(
+'''
+with paises as (
+    select "alpha-2", country_es
+    from countries_iso_data
+)
+
+select
+    "year",
+    parent_country as "Country",
+    country_es as "País",
+    num_parents as "Matrices",
+    num_corps_boricuas as "Filiales puertorriqueñas",
+    qdmtt as "QDMTT (Yes/No)",
+    iir as "IIR (Yes/No)",
+    case when qdmtt = 'Yes' then 'Sí' when qdmtt = 'No' then 'No' end as "QDMTT (Sí/No)",
+    case when iir = 'Yes' then 'Sí' when iir = 'No' then 'No' end as "IIR (Sí/No)",
+    num_parents_with_utpr as "Matrices con filiales en países con UTPR",
+
+from parent_countries_with_pillar2_status_rel
+left join paises
+on parent_tax_country_iso_code = paises."alpha-2"
+order by num_corps_boricuas desc
+'''
+)
+print('display_parent_countries_with_pillar2_status_rel')
+print(display_parent_countries_with_pillar2_status_rel)
+
+
+display_parent_countries_with_pillar2_status_2024_rel = duckdb.sql(
+'''
+select * exclude ("year", "Matrices con filiales en países con UTPR")
+from display_parent_countries_with_pillar2_status_rel
+where "year" = 2024
+'''
+)
+print('display_parent_countries_with_pillar2_status_2024_rel')
+print(display_parent_countries_with_pillar2_status_2024_rel)
+display_parent_countries_with_pillar2_status_2024_rel.pl().write_excel(f'{orbis_results_output_dir}/display_parent_countries_with_pillar2_status_2024.xlsx')
+print(f'Exported to {orbis_results_output_dir}/display_parent_countries_with_pillar2_status_2024.xlsx')
+
+
+display_parent_countries_with_pillar2_status_2025_rel = duckdb.sql(
+'''
+select * exclude ("year")
+from display_parent_countries_with_pillar2_status_rel
+where "year" = 2025
+'''
+)
+print('display_parent_countries_with_pillar2_status_2025_rel')
+print(display_parent_countries_with_pillar2_status_2025_rel)
+display_parent_countries_with_pillar2_status_2025_rel.pl().write_excel(f'{orbis_results_output_dir}/display_parent_countries_with_pillar2_status_2025.xlsx')
+print(f'Exported to {orbis_results_output_dir}/display_parent_countries_with_pillar2_status_2025.xlsx')
+
+
+display_parent_countries_with_utpr_revenue_rel = duckdb.sql(
+'''
+with paises as (
+    select "alpha-2", country_es
+    from countries_iso_data
+)
+
+select
+    "year",
+    parent_country as "Country",
+    country_es as "País",
+    num_parents as "Matrices",
+    num_corps_boricuas as "Filiales puertorriqueñas",
+    num_parents_with_utpr as "Matrices con filiales en países con UTPR",
+    total_filial_operating_revenue_max_eur_th / 1e3 as "Ingreso total de matrices (millones de euros)",
+    total_filial_operating_revenue_max_eur_th_with_utpr / 1e3 as "Ingreso total de matrices con filiales en países con UTPR (millones de euros)",
+
+from parent_countries_with_pillar2_status_rel
+left join paises
+on parent_tax_country_iso_code = paises."alpha-2"
+order by num_corps_boricuas desc
+'''
+)
+print('display_parent_countries_with_utpr_revenue_rel')
+print(display_parent_countries_with_utpr_revenue_rel)
+
+display_parent_countries_with_utpr_revenue_2024_rel = duckdb.sql(
+'''
+select * exclude ("year", "Matrices con filiales en países con UTPR", "Ingreso total de matrices con filiales en países con UTPR (millones de euros)")
+from display_parent_countries_with_utpr_revenue_rel
+where "year" = 2024
+'''
+)
+print('display_parent_countries_with_utpr_revenue_2024_rel')
+print(display_parent_countries_with_utpr_revenue_2024_rel)
+display_parent_countries_with_utpr_revenue_2024_rel.pl().write_excel(f'{orbis_results_output_dir}/display_parent_countries_with_utpr_revenue_2024.xlsx')
+print(f'Exported to {orbis_results_output_dir}/display_parent_countries_with_utpr_revenue_2024.xlsx')
+
+display_parent_countries_with_utpr_revenue_2025_rel = duckdb.sql(
+'''
+select * exclude ("year")
+from display_parent_countries_with_utpr_revenue_rel
+where "year" = 2025
+'''
+)
+print('display_parent_countries_with_utpr_revenue_2025_rel')
+print(display_parent_countries_with_utpr_revenue_2025_rel)
+display_parent_countries_with_utpr_revenue_2025_rel.pl().write_excel(f'{orbis_results_output_dir}/display_parent_countries_with_utpr_revenue_2025.xlsx')
+print(f'Exported to {orbis_results_output_dir}/display_parent_countries_with_utpr_revenue_2025.xlsx')
+
 
 # import sys; sys.exit()
 
@@ -373,21 +494,21 @@ order by num_corps_boricuas desc
 print('display_parent_companies_with_pillar2_status_2025_rel')
 print(display_parent_companies_with_pillar2_status_2025_rel)
 
-rel = duckdb.sql(
-'''
--- Ernst & Young (US245251451L) tiene solo US (parent), US (filiales) y BN Brunei Darussalam (filial)
--- so lo que pasa es que no hay info para BN y el US es parent
--- so el UTPR para E&Y de PR aparece vacio (NULL)
--- Solucion: rellenar pwc data para BN
+# rel = duckdb.sql(
+# '''
+# -- Ernst & Young (US245251451L) tiene solo US (parent), US (filiales) y BN Brunei Darussalam (filial)
+# -- so lo que pasa es que no hay info para BN y el US es parent
+# -- so el UTPR para E&Y de PR aparece vacio (NULL)
+# -- Solucion: rellenar pwc data para BN
 
--- Alera Group (US*4000000225888) tiene parent en US y filiales en US y LB Lebanon
--- same as before, no hay info sobre LB en el PWC report
--- Solucion: rellenar pwc data para LB
+# -- Alera Group (US*4000000225888) tiene parent en US y filiales en US y LB Lebanon
+# -- same as before, no hay info sobre LB en el PWC report
+# -- Solucion: rellenar pwc data para LB
 
-select list(distinct country_iso_code)
-from orbis_network_results
-where model_data_global_parent_bvdid = 'US*4000000225888'
-'''
-)
-print('rel')
-print(rel)
+# select list(distinct country_iso_code)
+# from orbis_network_results
+# where model_data_global_parent_bvdid = 'US*4000000225888'
+# '''
+# )
+# print('rel')
+# print(rel)
