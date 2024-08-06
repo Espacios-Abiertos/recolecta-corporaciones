@@ -131,6 +131,10 @@ companies_in_network_with_pr as (
     on corps_boricuas_to_orbis_parent.model_data_global_parent_bvdid = companies_in_network.bvd_id_orbis
     -- left join orbis_parent_companies
     -- on pr_to_orbis_parent.model_data_global_parent_bvdid = orbis_parent_companies.bvd_id_orbis
+),
+
+qualified_parent_companies as (
+    from 'outputs/orbis_search_results_2024_07_21/qualified_parent_companies.csv'
 )
 
 select
@@ -140,7 +144,10 @@ select
     company_name as parent_company_name,
     country_iso_code as parent_country_iso_code,
     state as parent_state,
+    filial_operating_revenue_max_eur_th,
 from companies_in_network_with_pr
+left join qualified_parent_companies
+using (model_data_global_parent_bvdid)
 where bvd_id_orbis is not null
 '''
 )
@@ -151,6 +158,8 @@ copy corp_boricuas_with_orbis_parent_rel to '{orbis_results_output_dir}/corp_bor
 ''')
 print(f"Exported to {orbis_results_output_dir}/corp_boricuas_with_orbis_parent_rel.csv")
 print()
+
+# import sys; sys.exit()
 
 display_corp_boricuas_with_orbis_parent_rel = duckdb.sql(
 '''
