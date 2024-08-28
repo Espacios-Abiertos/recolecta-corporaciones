@@ -46,6 +46,9 @@ Collects basic corporation information available from the "Corporations Search" 
 `recolecta_corporation_info.py`
 Collects detailed corporation information from the Department of State. Saves data into one JSON file per corporation.
 
+`exporta_foraneas_activas.py`
+Filters the list of corporations into those that are foreign and have an active status.
+
 `sql/attach_db_readonly.sql`
 Attaches the created database of corporation data sourced from the Department of State into a running DuckDB instance.
 
@@ -54,3 +57,17 @@ Joins all eight exported Orbis batches into one dataset. This includes both the 
 
 `get_orbis_qualified_companies.py`
 Filters for companies that may be elligible for Global Tax using the criteria of 750M euros in revenue.
+
+`describe_orbis_corporate_network.py`
+Exports the results of the Orbis corporate structure batch into a Parquet file for easier analysis.
+
+`get_orbis_parents_with_filial_countries.py`
+Processes the Orbis corporate structure for our companies of interest to determine UTPR on a per-company basis.
+
+`presentation_companies_table.py`
+Creates an Excel table of parent companies and their local branches in a presentation-friendly format.
+
+Other scripts:
+
+`get_pr_companies_for_orbis_search.py`
+Creates a list of local Puerto Rican companies to search for in Orbis.
