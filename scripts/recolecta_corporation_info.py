@@ -50,8 +50,9 @@ class Worker(multiprocessing.Process):
                 except requests.exceptions.HTTPError as e:
                     print(f'Error: {e}', e.response.status_code)
                     if e.response.status_code == 429:
-                        print('Sent too many requests. Waiting briefly...')
-                        time.sleep(10)
+                        wait_time = pow(2, download_attempts)
+                        print(f'Sent too many requests. Waiting briefly {wait_time} seconds ({wait_time / 60} minutes)...')
+                        time.sleep(wait_time)
                         continue
                     elif e.response.status_code == 520:
                         print('Error 520. Waiting briefly...')
@@ -65,6 +66,7 @@ class Worker(multiprocessing.Process):
             data = r.json()
             with open(fpath, 'w') as f:
                 json.dump(data, f)
+            time.sleep(5)
 
 
 if __name__ == '__main__':
@@ -82,19 +84,28 @@ if __name__ == '__main__':
     )
     '''
     )
-    con.execute(
-    '''
-    create or replace table corporations_to_recolectar as (
-    -- recolectar solo aquellas que esten funcionando todavía
-    with valid_status_matches as (
-        -- from grantee_matches -- solo los matches del listado de grantees del DDEC
-        from corporaciones -- the whole list de corps
-        where list_contains(['ACTIVA','FUSIONADA','CONVERSION','ENMENDADA'], status_es)
-    )
+    # con.execute(
+    # '''
+    # create or replace table corporations_to_recolectar as (
+    # -- recolectar solo aquellas que esten funcionando todavía
+    # with valid_status_matches as (
+    #     -- from grantee_matches -- solo los matches del listado de grantees del DDEC
+    #     from corporaciones -- the whole list de corps
+    #     -- where list_contains(['ACTIVA','FUSIONADA','CONVERSION','ENMENDADA'], status_es)
+    # )
 
-    select distinct on(registration_index) registration_index, corp_name, status_es
-    from valid_status_matches
-    order by corp_name
+    # select distinct on(registration_index) registration_index, corp_name, status_es
+    # from valid_status_matches
+    # order by corp_name
+    # )
+    # '''
+    # )
+
+    con.execute(
+    r'''
+    create or replace table corporations_to_recolectar as (
+        from corporaciones
+        where corp_name ilike '%coop%'
     )
     '''
     )

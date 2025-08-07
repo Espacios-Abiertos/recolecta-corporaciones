@@ -1,0 +1,46 @@
+<!-- https://espaciosabiertos.org/wp-content/uploads/IMG_PuertoRico_EspaciosAbiertos_9_Oportunidad-de-atraer-o-perder-3500-millones.pdf -->
+
+<h1>Totales por año</h1>
+<div id="observablehq-viewof-cbc_variable_radio_1"></div>
+<div id="observablehq-totals_by_year_plot"></div>
+
+<h1>Totales por región</h1>
+<div id="observablehq-viewof-cbc_variable_radio_2"></div>
+<div id="observablehq-totals_by_region_plot"></div>
+
+<h1>Totales por país</h1>
+<div id="observablehq-viewof-cou_select"></div>
+<div id="observablehq-viewof-cbc_variable_radio_3"></div>
+<div id="observablehq-totals_by_country_plot"></div>
+
+<h1>Recaudos en Puerto Rico</h1>
+<div id="observablehq-collections_in_puerto_rico_plot"></div>
+
+<h1>Recaudos en otras jurisdicciones</h1>
+<div id="observablehq-collections_in_other_jurisdictions_plot"></div>
+
+Credit: <a href="https://observablehq.com/d/faca863c2770097e">El impuesto mínimo global y sus efectos en Puerto Rico</a>
+<script type="module">
+import {Runtime, Inspector} from "https://cdn.jsdelivr.net/npm/@observablehq/runtime@5/dist/runtime.js";
+import define from "https://api.observablehq.com/d/faca863c2770097e.js?v=4";
+const name_to_selector = Object({
+    "viewof cbc_variable_radio_1": "#observablehq-viewof-cbc_variable_radio_1",
+    "totals_by_year_plot": "#observablehq-totals_by_year_plot",
+
+    "viewof cbc_variable_radio_2": "#observablehq-viewof-cbc_variable_radio_2",
+    "totals_by_region_plot": "#observablehq-totals_by_region_plot",
+
+    "viewof cou_select": "#observablehq-viewof-cou_select",
+    "viewof cbc_variable_radio_3": "#observablehq-viewof-cbc_variable_radio_3",
+    "totals_by_country_plot": "#observablehq-totals_by_country_plot",
+
+    "collections_in_puerto_rico_plot": "#observablehq-collections_in_puerto_rico_plot",
+    "collections_in_other_jurisdictions_plot": "#observablehq-collections_in_other_jurisdictions_plot",
+});
+new Runtime().module(define, name => {
+    const selector = name_to_selector[name];
+    if (selector) return new Inspector(document.querySelector(selector));
+    // if (name === "totals_by_year_plot") return new Inspector(document.querySelector("#observablehq-totals_by_year_plot"));
+    // if (name === "viewof cbc_variable_radio_1") return new Inspector(document.querySelector("#observablehq-viewof-cbc_variable_radio_1"));
+});
+</script>
