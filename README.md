@@ -20,6 +20,9 @@ There are several folders that organize how data flows around the repository:
   - Programs that run the analyses and output results in dataset and presentation formats
   - Generally, they are Python scripts which orchestrate a sequence of DuckDB SQL queries
 
+- `recolectas_incrementales/`
+  - Collections of thousands of data files that were not pushed directly to the repository.
+  - Save as `recolectas_incrementales/corporation_info` the folder saved on this Drive [link](https://drive.google.com/file/d/1M3ZaqqAQ1TNH1cKQ_vrJ1wRQswaxdKLr/view?usp=sharing) to access detailed corporation info.
 ## Prerequisites
 
 If you only need to go through the exported results, you can open the datasets in `outputs/` with your preferred tool. Excel should do for `.xlsx` and `.csv` files, while `.parquet` files can be skimmed using [Tad](https://www.tadviewer.com/). For viewing database files, we recommend [DBeaver](https://dbeaver.io/).
